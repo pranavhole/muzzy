@@ -10,34 +10,34 @@ const handler = NextAuth({
       clientSecret: "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"
     })
   ],
+  debug: true,
   callbacks: {
-    async signIn(params) {
-   
+    async signIn(params:any) {
       try {
-        const inputEmail: string | null | undefined =params.user.email; // Example function
+        const inputEmail = params.user.email;
         if (!inputEmail) {
           throw new Error("Email is required");
         }
-        const email: string = inputEmail;
-        console.log("data created");
+        const email = inputEmail;
+  
         await prismaClient.user.create({
           data: {
-            email:email ,
+            email: email,
             provider: "Google",
-            role:"EndUser"
-          }
-          
+            role: "EndUser",
+          },
         });
+        console.log("User created successfully");
       } catch (error) {
-        console.log(error);
-
+        console.error("Error during sign-in callback:", error);
+        return false; // Returning false will reject the sign-in attempt
       }
-      return true
-    }
-
-
-
-  }
+      return true; 
+    },
+  },
+  pages: {
+    signIn: "/auth/signin",
+  },  
 })
 
 export { handler as GET, handler as POST }
