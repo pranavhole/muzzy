@@ -9,26 +9,32 @@ const handler = NextAuth({
       clientSecret: "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",
     }),
   ],
-  debug: true,
- callbacks: {
-  async signIn(params){
-    console.log(params);
-    try{
-      await prismaClient.user.create({
-        data:{
-          email:params.user.email || "no email",
-          provider:"Google"
+  debug: process.env.NODE_ENV !== "production",
+  callbacks: {
+    async signIn({ user }) {
+      try {
+        // Use upsert to handle existing users
+        if (!user.email) {
+          console.error("No email returned from provider");
+          return false; // Prevent sign-in on missing email
         }
-      });
+        await prismaClient.user.upsert({
+          where: { email: user.email },
+          update: { provider: "Google" }, // Update if exists
+          create: {
+            email: user.email, // Google always provides email, no fallback needed
+            provider: "Google"
+          }
+        });
+        return true;
+      } catch (e) {
+        console.error("Database error:", e);
+        return false; // Prevent sign-in on database error
+      }
     }
-    catch(e){
-      console.log(e);
-    }
-    return true;
-  }
- },
+  },
   pages: {
-    signIn: "api/auth/signin", // Ensure this page exists
+    signIn: "/auth/signin", // Only if using custom page, otherwise remove
   },
 });
 

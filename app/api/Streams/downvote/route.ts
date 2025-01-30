@@ -1,46 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod"
 import { prismaClient } from "../../lib/db";
-import { Stream } from "stream";
+import { getServerSession } from "next-auth";
 // import { prismaClient } from "../lib/db";
-const CreateStreamSchema = z.object({
-    userId: z.string(),
+const UpVotesSchema = z.object({
     StreamId: z.string()
 })
 
 export async function POST(req: NextRequest) {
+
+    const session = await getServerSession();
+    const user = await prismaClient.user.findFirst({
+        where: {
+            email: session?.user?.email ?? ""
+        }
+    })
+    if (!user) {
+        return NextResponse.json({
+            message: "Unauthorized"
+        }, {
+            status: 401
+        })
+    }
     try {
-        const { userId, StreamId } = CreateStreamSchema.parse(req.body)
-        const stream = await prismaClient.stream.create({
-            data: {
-                userId: userId,
-                streamId: StreamId
+        const stream = await prismaClient.upVotes.delete({
+            where: {
+                userId_StreamId: {
+                    userId: user.id,
+                    StreamId: UpVotesSchema.parse(req.body).StreamId
+                }
             }
         })
         return NextResponse.json({
-            message:"added url",
+            message: "downvoted",
             id: stream.id
-        },{
-            status:200
-        })
-    } catch (e) {
-        return NextResponse.json({
-            message: e
         }, {
-            status: 411
+            status: 200
         })
     }
-
-}
-
-export async function  GET(req:NextRequest) {
-    const creatorId = req.nextUrl.searchParams.get("creatorId");
-    const streams= await prismaClient.stream.findMany({
-        where:{
-            userId: creatorId ?? ""
-        }
-    })
-    return NextResponse.json({
-        streams
-    })
+    catch (e: any) {
+        return NextResponse.json({
+            message: "Error Upvoting Stream"
+        }, {
+            status: 400
+        })
+    }
 }
