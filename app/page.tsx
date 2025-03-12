@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Appbar } from './components/Appbar';
+import Redirect from './components/Redirect';
 
 interface FeatureCard {
   title: string;
@@ -49,27 +50,27 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-900 to-black text-white">
       {/* Navigation */}
-    
-       <Appbar />
 
+      <Appbar />
+      <Redirect />
       {/* Hero Section */}
       <section className="container mx-auto px-6 py-20 text-center">
         <h1 className="text-5xl font-bold mb-6 leading-tight">
           Let Your Fans <span className="text-purple-400">Control</span> The Music
         </h1>
         <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
-          Connect with your audience like never before. Real-time voting, interactive playlists, 
+          Connect with your audience like never before. Real-time voting, interactive playlists,
           and seamless streaming for creators who want to engage their fans.
         </p>
         <div className="flex justify-center space-x-4">
-          <Link 
-            href="/creator-signup" 
+          <Link
+            href="/creator-signup"
             className="bg-purple-500 hover:bg-purple-600 px-8 py-4 rounded-full text-lg transition-colors"
           >
             I'm a Creator
           </Link>
-          <Link 
-            href="/fan-signup" 
+          <Link
+            href="/fan-signup"
             className="border border-purple-500 hover:bg-purple-900 px-8 py-4 rounded-full text-lg transition-colors"
           >
             I'm a Fan
@@ -151,8 +152,8 @@ export default function LandingPage() {
         <p className="text-gray-300 mb-8 max-w-xl mx-auto">
           Join thousands of creators already transforming their live music experiences
         </p>
-        <Link 
-          href="/signup" 
+        <Link
+          href="/signup"
           className="bg-purple-500 hover:bg-purple-600 px-8 py-4 rounded-full text-lg transition-colors inline-block"
         >
           Start Free Trial

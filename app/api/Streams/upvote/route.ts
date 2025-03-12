@@ -1,47 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod"
+import { z } from "zod";
 import { prismaClient } from "../../lib/db";
-import { Stream } from "stream";
 import { getServerSession } from "next-auth";
-// import { prismaClient } from "../lib/db";
+import { authOptions } from "../../lib/auth-optiosn";
+
+
 const UpVotesSchema = z.object({
-    StreamId: z.string()
-})
+  StreamId: z.string()
+});
 
 export async function POST(req: NextRequest) {
+  // Pass auth options to getServerSession
+  const session = await getServerSession(authOptions);
 
-    const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json(
+      { message: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  try {
     const user = await prismaClient.user.findFirst({
-        where: {
-            email: session?.user?.email ?? ""
-        }
-    })
+      where: { email: session.user.email }
+    });
+
     if (!user) {
-        return NextResponse.json({
-            message: JSON.stringify(session)
-        }, {
-            status: 401
-        })
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
     }
-    try {
-        const stream = await prismaClient.upVotes.create({
-            data: {
-                userId: user.id,
-                StreamId: UpVotesSchema.parse(req.body).StreamId
-            }
-        })
-        return NextResponse.json({
-            message: "upvoted",
-            id: stream.id
-        }, {
-            status: 200
-        })
-    }
-    catch (e:any) {
-        return NextResponse.json({
-            message: "error upvoting stream"
-        }, {
-            status: 400
-        })
-    }
+
+    const body = await req.json();
+    const { StreamId } = UpVotesSchema.parse(body.data);
+
+    const stream = await prismaClient.upVotes.create({
+      data: {
+        userId: user.id,
+        StreamId: StreamId
+      }
+    });
+    const upvotesCount = await prismaClient.upVotes.count({
+      where: {
+          StreamId: StreamId
+      }
+  });
+    return NextResponse.json(
+      { message: "upvoted", id: stream.id , upvotesCount:upvotesCount},
+      { status: 200 }
+    );
+  } catch (e: any) {
+    // console.log("Upvote error:", e);
+    return NextResponse.json(
+      { message: "Error upvoting stream" },
+      { status: 400 }
+    );
+  }
 }

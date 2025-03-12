@@ -1,103 +1,134 @@
 "use client";
+import YouTubePlayer from '../components/YouTubePlayer';
 import { useState, useEffect } from 'react';
-
+import axios from 'axios';
 interface SongQueueItem {
   id: string;
   title: string;
   votes: number;
   youtubeId: string;
 }
+         
+interface StreamData {
+  streams: Array<{
+    id: string;
+    active: boolean;
+    title: string;
+    extractedId: string;
+    _count: { upvotes: number };
+    upvotes: any[];
+  }>;
+}
+
 
 export default function MusicQueue() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [queue, setQueue] = useState<SongQueueItem[]>([]);
   const [currentSong, setCurrentSong] = useState<SongQueueItem | null>(null);
   const [player, setPlayer] = useState<any>(null);
-
-  // Improved YouTube ID extraction
   const getYoutubeId = (url: string) => {
-    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp =
+      /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const videoId = getYoutubeId(youtubeUrl);
-    
-    if (videoId) {
-      const newSong: SongQueueItem = {
-        id: Date.now().toString(),
-        title: `Song ${Date.now()}`, // Temporary title
-        votes: 0,
-        youtubeId: videoId
-      };
-      
-      // Use functional update to ensure latest state
-      setQueue(prevQueue => [...prevQueue, newSong]);
-      setYoutubeUrl('');
-      console.log('Added to queue:', newSong); // Debug log
-    } else {
-      console.error('Invalid YouTube URL');
-      alert('Please enter a valid YouTube URL');
-    }
-  };
-
-
-  const handleVote = (id: string, increment: number) => {
-    setQueue(queue.map(song => {
-      if (song.id === id) {
-        return { ...song, votes: song.votes + increment };
-      }
-      return song;
-    }).sort((a, b) => b.votes - a.votes));
-  };
-
-  // Audio player controls
-  const loadAudio = (youtubeId: string) => {
-    if (player) {
-      player.loadVideoById(youtubeId);
-      player.playVideo();
-    }
+    return match && match[2].length === 11 ? match[2] : null;
   };
 
   useEffect(() => {
-    // Initialize YouTube player
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    const fetchStreamData = async () => {
+      try {
+        const res = await axios.get('/api/Streams/my');
+        const data: StreamData = res.data;
+        console.log(data);
+        const initialQueue = data.streams.map((stream) => ({
+          id: stream.id,
+          title: stream.title,
+          votes: stream._count.upvotes,
+          youtubeId: stream.extractedId.split('&')[0],
+        }));
+        setQueue(initialQueue);
 
-    (window as any).onYouTubeIframeAPIReady = () => {
-      const ytPlayer = new (window as any).YT.Player('audio-player', {
-        height: '0',
-        width: '0',
-        playerVars: {
-          autoplay: 1,
-          modestbranding: 1,
-          controls: 0,
-          showinfo: 0,
-          rel: 0
-        },
-        events: {
-          onReady: () => setPlayer(ytPlayer)
-        }
-      });
+      } catch (err) {
+        console.error('Failed to fetch stream data:', err);
+      }
     };
+
+    fetchStreamData();
   }, []);
 
-  useEffect(() => {
-    if (currentSong && player) {
-      loadAudio(currentSong.youtubeId);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const videoId = getYoutubeId(youtubeUrl);
+    const url = youtubeUrl;
+
+    if (!videoId) {
+      alert('Please enter a valid YouTube URL');
+      return;
     }
-  }, [currentSong]);
+
+    try {
+      const response = await axios.post('/api/Streams', {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        credentials: 'include',
+      });
+      const data: StreamData = await response.data;
+      const initialQueue = data.streams.map((stream) => ({
+        id: stream.id,
+        title: stream.title,
+        votes: stream._count.upvotes,
+        youtubeId: stream.extractedId.split('&')[0],
+      }));
+      const activeStream = data.streams.find((stream) => stream.active);
+      setQueue(initialQueue);
+      if (activeStream) {
+        setCurrentSong({
+          id: activeStream.id,
+          title: activeStream.title,
+          votes: activeStream._count.upvotes,
+          youtubeId: activeStream.extractedId.split('&')[0],
+        });
+      }
+      setYoutubeUrl('');
+    } catch (error) {
+      console.log(error);
+      alert('Failed to add song. Please try again.');
+    }
+  };
+  const handleVote = async (id: string, increment: number) => {
+    let res;
+    if (increment === 1) {
+      res = await axios.post('/api/Streams/upvote', {
+        headers: { 'Content-Type': 'application/json' },
+        data: { StreamId: id },
+        withCredentials: true
+      });
+
+    } else {
+      res = await axios.post('/api/Streams/downvote', {
+        headers: { 'Content-Type': 'application/json' },
+        data: { StreamId: id },
+        withCredentials: true
+      })
+    }
+    const { message,streamId, upvoteCount } = res.data;
+    console.log(message);
+    
+    setQueue((prev) =>
+      prev.map((song) => 
+        song.id === streamId ? {...song, votes: upvoteCount} : song
+      ).sort((a, b) => b.votes - a.votes)
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      {/* Hidden audio player */}
-      <div id="audio-player" className="hidden"></div>
+      {/* Replace the hidden player div with the dynamic component */}
+      <YouTubePlayer
+        currentSong={currentSong}
+        onPlayerReady={setPlayer}
+      />
 
-      {/* Current Audio Controls */}
+      {/* Now Playing Display */}
       <div className="mb-8 max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-bold mb-4">Now Playing</h2>
         {currentSong ? (
@@ -111,13 +142,25 @@ export default function MusicQueue() {
               <h3 className="text-lg font-medium">{currentSong.title}</h3>
               <div className="flex space-x-4 mt-2">
                 <button
-                  onClick={() => player.playVideo()}
+                  onClick={() => {
+                    if (player && player.playVideo) {
+                      player.playVideo();
+                    } else {
+                      console.warn('Player not initialized');
+                    }
+                  }}
                   className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
                 >
                   Play
                 </button>
                 <button
-                  onClick={() => player.pauseVideo()}
+                  onClick={() => {
+                    if (player && player.pauseVideo) {
+                      player.pauseVideo();
+                    } else {
+                      console.warn('Player not initialized');
+                    }
+                  }}
                   className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
                 >
                   Pause
@@ -136,10 +179,14 @@ export default function MusicQueue() {
         )}
       </div>
 
+      {/* Queue and Add Song Sections */}
       <div className="max-w-4xl mx-auto grid gap-8 lg:grid-cols-3">
-        {/* Song Submission Form */}
+        {/* Add Song Form */}
         <div className="lg:col-span-1">
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white p-6 rounded-lg shadow-md"
+          >
             <h2 className="text-xl font-bold mb-4">Add a Song</h2>
             <input
               type="text"
@@ -162,9 +209,11 @@ export default function MusicQueue() {
                   <iframe
                     width="100%"
                     height="100%"
-                    src={`https://www.youtube.com/embed/${getYoutubeId(youtubeUrl)}`}
-                    title="YouTube video player"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    src={`https://www.youtube.com/embed/${getYoutubeId(
+                      youtubeUrl
+                    )}`}
+                    title="YouTube preview"
+                    allow="encrypted-media"
                   />
                 </div>
               </div>
@@ -178,7 +227,10 @@ export default function MusicQueue() {
             <h2 className="text-xl font-bold mb-4">Queue</h2>
             <div className="space-y-4">
               {queue.map((song) => (
-                <div key={song.id} className="flex items-center p-4 border rounded-lg hover:bg-gray-50">
+                <div
+                  key={song.id}
+                  className="flex items-center p-4 border rounded-lg hover:bg-gray-50"
+                >
                   <img
                     src={`https://img.youtube.com/vi/${song.youtubeId}/default.jpg`}
                     alt={song.title}
@@ -220,3 +272,4 @@ export default function MusicQueue() {
     </div>
   );
 }
+

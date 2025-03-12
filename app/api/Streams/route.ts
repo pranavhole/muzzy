@@ -1,18 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getServerSession } from "next-auth";
 import { prismaClient } from "../lib/db";
+import { authOptions } from "../lib/auth-optiosn";
 //@ts-ignore
 import youtubesearchapi from "youtube-search-api";
 
 const YT_REGEX = /^(?:(?:https?:)?\/\/)?(?:www\.)?(?:m\.)?(?:youtu(?:be)?\.com\/(?:v\/|embed\/|watch(?:\/|\?v=))|youtu\.be\/)((?:\w|-){11})(?:\S+)?$/;
 const CreateStreamSchema = z.object({
-    creatorId: z.string(),
     url: z.string()
 });
 
 export async function POST(req: NextRequest) {
     try {
-        const data = CreateStreamSchema.parse(await req.json());
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.email) {
+            return NextResponse.json(
+                { message: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+        const user = await prismaClient.user.findUnique({
+            where: { email: session.user.email }
+        });
+        if (!user) {
+            return NextResponse.json(
+                { message: "User not found" },
+                { status: 404 }
+            );
+        }
+        const creatorId = user.id;
+        const body = await req.json();
+        const data = CreateStreamSchema.parse(body.data);
         const isYt = data.url.match(YT_REGEX);
         if (!isYt) {
             return NextResponse.json({
@@ -38,7 +57,7 @@ export async function POST(req: NextRequest) {
 
         const stream = await prismaClient.stream.create({
             data: {
-                userId: data.creatorId,
+                userId: creatorId,
                 url: data.url,
                 extractedId,
                 title: title ?? "Can't find",
@@ -48,11 +67,27 @@ export async function POST(req: NextRequest) {
             }
         });
 
+
+        const streams = await prismaClient.stream.findMany({
+            where: {
+                userId: creatorId
+            },
+            include: {
+                _count: {
+                    select: {
+                        upvotes: true
+                    }
+                },
+                upvotes: {
+                    where: {
+                        userId: user.id
+                    }
+                }
+            },
+        });
+
         return NextResponse.json({
-            message: "Added URL",
-            id: stream.id
-        }, {
-            status: 200
+            streams
         });
 
     } catch (e) {
@@ -67,6 +102,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
     const creatorId = req.nextUrl.searchParams.get("creatorId");
+
     if (!creatorId) {
         return NextResponse.json({
             message: "creatorId is required"
