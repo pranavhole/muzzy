@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const session = await getServerSession(authOptions);
     const body = await req.json();
-    const { StreamId } = UpVotesSchema.parse(body.data);
+    const { StreamId } = UpVotesSchema.parse(body);
 
 console.log(body);
 

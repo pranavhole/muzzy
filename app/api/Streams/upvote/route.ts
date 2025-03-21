@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { StreamId } = UpVotesSchema.parse(body.data);
+    const { StreamId } = UpVotesSchema.parse(body);
 
     const stream = await prismaClient.upVotes.create({
       data: {

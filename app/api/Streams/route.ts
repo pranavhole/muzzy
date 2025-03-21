@@ -29,9 +29,14 @@ export async function POST(req: NextRequest) {
                 { status: 404 }
             );
         }
-        const creatorId = user.id;
+        let creatorId = req.nextUrl.searchParams.get("creatorId");
+        if (!creatorId) {
+            creatorId = user.id;
+        }
         const body = await req.json();
-        const data = CreateStreamSchema.parse(body.data);
+        console.log(body);
+
+        const data = CreateStreamSchema.parse(JSON.parse(body.body));
         const isYt = data.url.match(YT_REGEX);
         if (!isYt) {
             return NextResponse.json({
@@ -113,7 +118,20 @@ export async function GET(req: NextRequest) {
 
     const streams = await prismaClient.stream.findMany({
         where: {
-            userId: creatorId
+            userId: creatorId,
+            active:true
+        },
+        include: {
+            _count: {
+                select: {
+                    upvotes: true
+                }
+            },
+            upvotes: {
+                where: {
+                    userId: creatorId
+                }
+            }
         }
     });
 

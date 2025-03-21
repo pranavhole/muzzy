@@ -29,8 +29,22 @@ export const authOptions = {
         return true;
       } catch (e) {
         console.error("Database error:", e);
-        return false; // Prevent sign-in on database error
+        return false; 
       }
+    },
+    async session({ session, token }: { session: Session; token: any }) {
+      const dbUser = await prismaClient.user.findUnique({
+        where: { email: session.user?.email ?? '' },
+      });
+      if (session.user && dbUser) {
+        session.user = {
+          id: dbUser.id ?? '',
+          email : dbUser.email ?? '',
+          role : dbUser.role ?? ''  
+        } as any;
+      }
+
+      return session;
     }
   },
   pages: {
